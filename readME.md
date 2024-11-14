@@ -26,8 +26,9 @@ A lightweight text editor built with Python and Tkinter, offering basic text edi
     ```
 3. Run the text editor:
     ```bash
-    python editor.py
+    python main.py
     ```
+    *Note*: On macOS, you might need to use `python3` instead of `python`.
 
 ## 📖 Usage
 
@@ -53,6 +54,17 @@ A lightweight text editor built with Python and Tkinter, offering basic text edi
 - 📊 Line numbering
 - 🎨 Syntax highlighting
 - 📑 Multiple tabs support
+
+## 🖥️ Compatibility
+
+- Works on **Windows**, **macOS**, and **Linux**.
+- Keyboard shortcuts:
+    - **Windows/Linux**: Use `Ctrl` key (e.g., `Ctrl+N` for New File)
+    - **macOS**: Use `Command` key (e.g., `Cmd+N` for New File)
+
+## 🖼️ Screenshot
+
+![Text Editor Screenshot](screenshot.png)
 
 ## 🤝 Contributing
 
