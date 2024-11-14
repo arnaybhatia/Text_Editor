@@ -116,6 +116,13 @@ class TextEditor:
         edit_menu = tk.Menu(menu_bar, tearoff=0)
         edit_menu.add_command(label="Undo", command=self.undo_edit, accelerator=accel_undo)
         edit_menu.add_command(label="Redo", command=self.redo_edit, accelerator=accel_redo)
+        accel_find = 'Ctrl+F'
+        accel_replace = 'Ctrl+H'
+        if sys.platform == 'darwin':
+            accel_find = 'Cmd+F'
+            accel_replace = 'Cmd+H'
+        edit_menu.add_command(label="Find", command=self.find_text, accelerator=accel_find)
+        edit_menu.add_command(label="Replace", command=self.replace_text, accelerator=accel_replace)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
         
         self.root.config(menu=menu_bar)
@@ -127,6 +134,8 @@ class TextEditor:
         self.root.bind('<Control-q>', lambda e: self.quit_app())
         self.root.bind('<Control-z>', lambda e: self.undo_edit())
         self.root.bind('<Control-y>', lambda e: self.redo_edit())
+        self.root.bind('<Control-f>', lambda e: self.find_text())
+        self.root.bind('<Control-h>', lambda e: self.replace_text())
 
     def bind_mac_shortcuts(self):
         self.root.bind('<Command-n>', lambda e: self.new_file())
@@ -192,6 +201,58 @@ class TextEditor:
         current_underline = self.text_font.cget('underline')
         new_underline = 0 if current_underline == 1 else 1
         self.text_font.configure(underline=new_underline)
+
+    def find_text(self):
+        search_toplevel = tk.Toplevel(self.root)
+        search_toplevel.title("Find")
+
+        tk.Label(search_toplevel, text="Find:").grid(row=0, column=0, padx=4, pady=4)
+        search_entry = tk.Entry(search_toplevel, width=30)
+        search_entry.grid(row=0, column=1, padx=4, pady=4)
+        search_entry.focus_set()
+
+        def find():
+            word = search_entry.get()
+            self.text_area.tag_remove('found', '1.0', tk.END)
+            if word:
+                idx = '1.0'
+                while True:
+                    idx = self.text_area.search(word, idx, nocase=1, stopindex=tk.END)
+                    if not idx:
+                        break
+                    lastidx = f'{idx}+{len(word)}c'
+                    self.text_area.tag_add('found', idx, lastidx)
+                    idx = lastidx
+                self.text_area.tag_config('found', foreground='red', background='yellow')
+            search_toplevel.destroy()
+            self.status_bar.config(text=f"Found occurrences of '{word}'")
+
+        tk.Button(search_toplevel, text="Find All", command=find).grid(row=1, column=0, columnspan=2, padx=4, pady=4)
+
+    def replace_text(self):
+        replace_toplevel = tk.Toplevel(self.root)
+        replace_toplevel.title("Replace")
+
+        tk.Label(replace_toplevel, text="Find:").grid(row=0, column=0, padx=4, pady=4)
+        search_entry = tk.Entry(replace_toplevel, width=30)
+        search_entry.grid(row=0, column=1, padx=4, pady=4)
+        search_entry.focus_set()
+
+        tk.Label(replace_toplevel, text="Replace:").grid(row=1, column=0, padx=4, pady=4)
+        replace_entry = tk.Entry(replace_toplevel, width=30)
+        replace_entry.grid(row=1, column=1, padx=4, pady=4)
+
+        def replace():
+            word = search_entry.get()
+            replace_text = replace_entry.get()
+            content = self.text_area.get('1.0', tk.END)
+            new_content = content.replace(word, replace_text)
+            self.text_area.delete('1.0', tk.END)
+            self.text_area.insert('1.0', new_content)
+            self.status_bar.config(text=f"Replaced '{word}' with '{replace_text}'")
+            replace_toplevel.destroy()
+
+        tk.Button(replace_toplevel, text="Replace All", command=replace).grid(row=2, column=0, columnspan=2, padx=4, pady=4)
 
     def undo_edit(self):
         try:
