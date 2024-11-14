@@ -1,20 +1,20 @@
-# Simple Text Editor
+# ✍️ Simple Text Editor
 
 A lightweight text editor built with Python and Tkinter, offering basic text editing capabilities with a clean interface.
 
-## Features
+## ✨ Features
 
-- Open and edit text files
-- Save files in various formats
-- Word wrap support
-- Simple and intuitive menu interface
+- 📂 Open and edit text files
+- 💾 Save files in various formats
+- ↩️ Word wrap support
+- 🎯 Simple and intuitive menu interface
 
-## Prerequisites
+## 🚀 Prerequisites
 
 - Python 3.x 🐍
 - Tkinter (usually comes pre-installed with Python) 🖼️
 
-## Installation
+## ⚡ Installation
 
 1. Clone the repository:
     ```bash
@@ -29,22 +29,43 @@ A lightweight text editor built with Python and Tkinter, offering basic text edi
     python editor.py
     ```
 
-## Usage
+## 📖 Usage
 
-- Open the application and start typing to create a new document.
-- Use the `File` menu to open, save, or create new files.
-- Toggle word wrap from the `View` menu.
+1. **Opening Files** 📂
+   - Click on `File > Open` in the menu bar
+   - Select your text file from the file dialog
 
-## Contributing
+2. **Editing Text** ✏️
+   - Simply type in the text area
+   - Text automatically wraps to the next line
 
-Contributions are welcome! Please fork the repository and submit a pull request.
+3. **Saving Files** 💾
+   - Click on `File > Save` in the menu bar
+   - Choose location and file name
+   - Supports .txt and all other text file formats
 
-## License
+4. **Exiting** 🚪
+   - Click on `File > Exit` or close the window
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+## 🔄 Features in Development
 
-## Contact
+- 🔍 Find and Replace functionality
+- 📊 Line numbering
+- 🎨 Syntax highlighting
+- 📑 Multiple tabs support
 
-For any questions or suggestions, feel free to open an issue or contact me at [your-email@example.com](mailto:your-email@example.com).
+## 🤝 Contributing
 
-Happy coding! ✨
+1. Fork the project 🍴
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request 🎯
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with Python 🐍 and Tkinter 🖼️
