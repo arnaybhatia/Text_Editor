@@ -18,7 +18,7 @@ A lightweight text editor built with Python and Tkinter, offering basic text edi
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/yourusername/Text_Editor.git
+    git clone https://github.com/arnaybhatia/Text_Editor.git
     ```
 2. Navigate to the project directory:
     ```bash
@@ -62,10 +62,6 @@ A lightweight text editor built with Python and Tkinter, offering basic text edi
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request 🎯
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## 🙏 Acknowledgments
 
 - Built with Python 🐍 and Tkinter 🖼️
@@ -73,7 +69,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📫 Contact
 
-Got questions? Feel free to [open an issue](https://github.com/yourusername/Text_Editor/issues) or reach out! 
+Got questions? Feel free to [open an issue](https://github.com/arnaybhatia/Text_Editor/issues) or reach out! 
 
 ---
-Made with ❤️ by [Your Name]
+Made by Arnay
