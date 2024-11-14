@@ -20,3 +20,6 @@ dist/
 # IDE configuration files
 .idea/
 .vscode/
+
+# Autosave backup file
+backup.txt
