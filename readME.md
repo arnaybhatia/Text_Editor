@@ -69,3 +69,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Built with Python 🐍 and Tkinter 🖼️
+- Inspired by simple, lightweight text editors
+
+## 📫 Contact
+
+Got questions? Feel free to [open an issue](https://github.com/yourusername/Text_Editor/issues) or reach out! 
+
+---
+Made with ❤️ by [Your Name]
