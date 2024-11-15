@@ -5,121 +5,219 @@ import sys  # Add sys to detect the platform
 import themes  # Import the themes module
 import threading  # For autosave
 import time
-import enchant  # Import enchant for spell checking
+
+# Check for spell checker availability
+try:
+    import enchant
+    SPELL_CHECK_ENABLED = True
+except ImportError:
+    SPELL_CHECK_ENABLED = False
 
 class TextEditor:
+    SPELL_CHECK_ENABLED = SPELL_CHECK_ENABLED  # Class attribute
+
     def __init__(self, root):
-        # Set window size and position
+        self.root = root
         self.root.title("✍️ Simple Text Editor")
-        # Set window size and position
         self.root.geometry("1000x600")
         self.root.minsize(400, 300)
         
-        # Create main frame
-        self.main_frame = ttk.Frame(self.root)
-        self.main_frame.pack(expand=True, fill='both')
+        # Initialize themes first
+        self.current_theme = themes.default_theme
         
-        # Create toolbar
-        self.create_toolbar()
+        # Configure ttk styles
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
         
-        # Initialize default font settings
+        # Initialize font settings before creating widgets
         self.current_font_family = 'Consolas'
         self.current_font_size = 11
         self.text_font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
         
-        # Initialize themes
-        self.current_theme = themes.default_theme
-        self.apply_theme(self.current_theme)
+        # Configure common styles
+        self.style.configure('Toolbar.TFrame', padding=1)
+        self.style.configure('Tool.TButton', padding=2, relief='flat')
+        self.style.configure('Tool.TCombobox', padding=2)
+        self.style.configure('Status.TLabel', padding=2)
         
-        # Create line number canvas
-        self.line_numbers = tk.Text(
-            self.main_frame, width=4, padx=3, takefocus=0, border=0,
-            background='lightgrey', state='disabled', wrap='none'
-        )
-        self.line_numbers.pack(side='left', fill='y')
+        # Map states for better button feedback
+        self.style.map('Tool.TButton',
+            background=[('pressed', '!disabled', '#CCE4F7'),
+                       ('active', '#E5F1FB')],
+            relief=[('pressed', 'sunken'),
+                   ('!pressed', 'flat')])
         
-        # Create text area with custom font and colors
-        self.text_area = tk.Text(
-            self.main_frame,
-            wrap='word',
-            undo=True,
-            font=self.text_font,
-            bg='white',
-            fg='black',
-            insertbackground='black',
-            selectbackground='#0078d7',
-            selectforeground='white',
-            padx=5,
-            pady=5
-        )
-        self.text_area.pack(side='right', expand=True, fill='both')
+        # Create and configure main frame using grid
+        self.main_frame = ttk.Frame(self.root, padding="3")
+        self.main_frame.grid(row=0, column=0, sticky='nsew')
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
         
-        # Bind events for line numbers, syntax highlighting, and bracket matching
-        self.text_area.bind('<KeyRelease>', self.on_key_release)
-        self.text_area.bind('<Return>', self.auto_indent)
-        self.text_area.bind('<Key>', self.match_brackets)
-        self.text_area.bind('<MouseWheel>', self.sync_scroll)
-        self.text_area.bind('<Button-1>', self.sync_scroll)
-        self.text_area.bind('<Configure>', self.sync_scroll)
-        
-        # Add scrollbar
-        self.scrollbar = ttk.Scrollbar(self.text_area, orient='vertical', command=self.text_area.yview)
-        self.scrollbar.pack(side='right', fill='y')
-        self.text_area.config(yscrollcommand=self.scrollbar.set)
-        
-        # Create status bar
-        self.status_bar = ttk.Label(self.root, text="Ready", anchor='w')
-        self.status_bar.pack(side='bottom', fill='x')
-        
-        self.create_menu()
+        # Create toolbar and place it at the top
+        self.create_toolbar()
+
+        # Create text area and status bar frame
+        self.create_text_widgets()
+
+        # Bind events
         self.bind_shortcuts()
         if sys.platform == 'darwin':
             self.bind_mac_shortcuts()
         
-        # Start autosave
-        self.autosave_interval = 300  # 5 minutes
+        # Initialize spell checker if available
+        if self.SPELL_CHECK_ENABLED:
+            try:
+                self.spell_checker = enchant.Dict("en_US")
+                self.create_spellcheck_menu()
+            except:
+                self.SPELL_CHECK_ENABLED = False
+        
+        # Apply theme after all widgets are created
+        self.apply_theme(self.current_theme)
+        
+        # Initialize autosave
+        self.autosave_interval = 300
         self.start_autosave()
+
+        self.create_menu()  # Ensure the menu bar is created
+
+    def create_text_widgets(self):
+        # Create text frame and configure grid
+        self.text_frame.grid(row=1, column=0, sticky='nsew')
+        self.main_frame.grid_rowconfigure(1, weight=1)
+        self.main_frame.grid_columnconfigure(0, weight=1)
+
+        self.text_frame_inner = ttk.Frame(self.text_frame, padding="2")
+        self.text_frame_inner.grid(row=0, column=0, sticky='nsew')
+        self.text_frame.grid_rowconfigure(0, weight=1)
+        self.text_frame.grid_columnconfigure(0, weight=1)
         
-        # Initialize spell checker
-        self.spell_checker = enchant.Dict("en_US")
+        # Create line numbers with better sizing
+        self.line_numbers = tk.Text(
+            self.text_frame_inner,
+            width=5,
+            padx=4,
+            pady=4,
+            takefocus=0,
+            border=0,
+            background=self.current_theme['line_bg'],
+            foreground=self.current_theme['line_fg'],
+            state='disabled',
+            wrap='none'
+        )
+        self.line_numbers.grid(row=0, column=0, sticky='ns')
         
-        # Initialize context menu for spell check
-        self.create_spellcheck_menu()
+        # Create text area with better spacing
+        self.text_area = tk.Text(
+            self.text_frame_inner,
+            wrap='word',
+            undo=True,
+            font=self.text_font,
+            padx=8,
+            pady=8,
+            spacing1=2,  # Add line spacing
+            spacing2=2,  # Add paragraph spacing
+            spacing3=2   # Add block spacing
+        )
+        self.text_area.grid(row=0, column=1, sticky='nsew')
+        self.text_frame_inner.grid_rowconfigure(0, weight=1)
+        self.text_frame_inner.grid_columnconfigure(1, weight=1)
         
+        # Create scrollbar with better appearance
+        self.scrollbar = ttk.Scrollbar(
+            self.text_frame_inner,
+            orient='vertical',
+            command=self.text_area.yview
+        )
+        self.scrollbar.grid(row=0, column=2, sticky='ns')
+        self.text_area.config(yscrollcommand=self.scrollbar.set)
+        
+        # Create status bar with better styling
+        self.status_bar = ttk.Label(
+            self.text_frame,
+            text="Ready",
+            anchor='w',
+            style='Status.TLabel'
+        )
+        
+        # Bind events
+        self.text_area.bind('<KeyRelease>', self.on_key_release)
+        self.text_area.bind('<Return>', self.auto_indent)
+        self.text_area.bind('<Key>', self.match_brackets)
+        self.text_area.bind('<MouseWheel>', self.sync_scroll)
+        self.text_area.bind('<Button-1>', lambda e: self.sync_scroll())
+        self.text_area.bind('<Configure>', lambda e: self.sync_scroll())
+
+        # Create status bar and place it at the bottom
+        self.status_bar.grid(row=2, column=0, sticky='ew')
+
     def create_toolbar(self):
-        toolbar = ttk.Frame(self.main_frame)
-        toolbar.pack(side='top', fill='x')
+        # Create toolbar frame
+        self.toolbar = ttk.Frame(self.main_frame, style='Toolbar.TFrame', height=28)
+        self.toolbar.grid(row=0, column=0, sticky='ew')
+        self.toolbar.grid_propagate(False)  # Maintain fixed height
         
-        btn_new = ttk.Button(toolbar, text="New", command=self.new_file)
-        btn_new.pack(side='left', padx=2, pady=2)
+        # File operations group
+        file_frame = ttk.Frame(self.toolbar)
+        file_frame.pack(side='left', padx=2)
         
-        btn_open = ttk.Button(toolbar, text="Open", command=self.open_file)
-        btn_open.pack(side='left', padx=2, pady=2)
+        # Compact file operation buttons
+        for name, cmd in [("New", self.new_file), 
+                         ("Open", self.open_file),
+                         ("Save", self.save_file)]:
+            btn = ttk.Button(file_frame, text=name, style='Tool.TButton',
+                           command=cmd, width=4)
+            btn.pack(side='left', padx=1)
         
-        btn_save = ttk.Button(toolbar, text="Save", command=self.save_file)
-        btn_save.pack(side='left', padx=2, pady=2)
+        ttk.Separator(self.toolbar, orient='vertical').pack(side='left', fill='y', padx=3)
         
-        # Add font family dropdown
-        common_fonts = ['Arial', 'Calibri', 'Times New Roman', 'Courier New', 'Helvetica', 'Consolas']
+        # Font controls
+        font_frame = ttk.Frame(self.toolbar)
+        font_frame.pack(side='left', padx=2)
+        
+        # More compact font controls
+        common_fonts = ['Consolas', 'Arial', 'Calibri', 'Times New Roman']
         self.font_family_var = tk.StringVar(value=self.current_font_family)
-        font_family_menu = ttk.Combobox(toolbar, textvariable=self.font_family_var, values=common_fonts, state='readonly')
-        font_family_menu.pack(side='left', padx=5)
-        font_family_menu.bind("<<ComboboxSelected>>", self.change_font_family)
+        font_family_menu = ttk.Combobox(
+            font_frame,
+            textvariable=self.font_family_var,
+            values=common_fonts,
+            width=10,
+            style='Tool.TCombobox',
+            state='readonly'
+        )
+        font_family_menu.pack(side='left', padx=1)
+        font_family_menu.bind("<<ComboboxSelected>>", self.change_font_family)  # Bind event
         
-        # Add font size dropdown
+        # More compact size dropdown
         self.font_size_var = tk.IntVar(value=self.current_font_size)
-        font_size_menu = ttk.Combobox(toolbar, textvariable=self.font_size_var, values=tuple(range(8, 72, 2)), width=3, state='readonly')
-        font_size_menu.pack(side='left', padx=5)
-        font_size_menu.bind("<<ComboboxSelected>>", self.change_font_size)
+        font_size_menu = ttk.Combobox(
+            font_frame,
+            textvariable=self.font_size_var,
+            values=[8,9,10,11,12,14,16,18,20,24,28,32,36],
+            width=3,
+            style='Tool.TCombobox',
+            state='readonly'
+        )
+        font_size_menu.pack(side='left', padx=1)
+        font_size_menu.bind("<<ComboboxSelected>>", self.change_font_size)  # Bind event
         
-        # Add bold, italic, underline buttons
-        bold_btn = ttk.Button(toolbar, text="B", command=self.toggle_bold)
-        bold_btn.pack(side='left', padx=2)
-        italic_btn = ttk.Button(toolbar, text="I", command=self.toggle_italic)
-        italic_btn.pack(side='left', padx=2)
-        underline_btn = ttk.Button(toolbar, text="U", command=self.toggle_underline)
-        underline_btn.pack(side='left', padx=2)
+        ttk.Separator(self.toolbar, orient='vertical').pack(side='left', fill='y', padx=3, pady=2)
         
+        # Style controls group
+        style_frame = ttk.Frame(self.toolbar)
+        style_frame.pack(side='left', padx=2)
+        
+        # Add formatting buttons (more compact)
+        bold_btn = ttk.Button(style_frame, text="B", style='Tool.TButton', command=self.toggle_bold, width=2)
+        bold_btn.pack(side='left', padx=1)
+        
+        italic_btn = ttk.Button(style_frame, text="I", style='Tool.TButton', command=self.toggle_italic, width=2)
+        italic_btn.pack(side='left', padx=1)
+        
+        underline_btn = ttk.Button(style_frame, text="U", style='Tool.TButton', command=self.toggle_underline, width=2)
+        underline_btn.pack(side='left', padx=1)
+
     def create_menu(self):
         menu_bar = tk.Menu(self.root)
         
@@ -224,10 +322,12 @@ class TextEditor:
     def change_font_family(self, event=None):
         self.current_font_family = self.font_family_var.get()
         self.text_font.configure(family=self.current_font_family)
+        self.text_area.configure(font=self.text_font)  # Apply font change to text area
 
     def change_font_size(self, event=None):
         self.current_font_size = self.font_size_var.get()
         self.text_font.configure(size=self.current_font_size)
+        self.text_area.configure(font=self.text_font)  # Corrected syntax error
 
     def toggle_bold(self):
         current_weight = self.text_font.cget('weight')
@@ -310,13 +410,70 @@ class TextEditor:
             pass
 
     def apply_theme(self, theme):
+        # Update ttk styles for the current theme
+        self.style.configure('Toolbar.TFrame', background=theme['menu_bg'])
+        self.style.configure('Tool.TButton',
+            background=theme['menu_bg'],
+            foreground=theme['menu_fg']
+        )
+        self.style.configure('TCombobox',
+            background=theme['menu_bg'],
+            foreground=theme['menu_fg'],
+            fieldbackground=theme['bg'],
+            selectbackground=theme['select_bg'],
+            selectforeground=theme['select_fg']
+        )
+        self.style.configure('TLabel',
+            background=theme['menu_bg'],
+            foreground=theme['menu_fg']
+        )
+        self.style.configure('TSeparator',
+            background=theme['menu_bg']
+        )
+        
+        # Apply theme to existing widgets
+        self.root.configure(bg=theme['bg'])
+        self.main_frame.configure(style='Toolbar.TFrame')
+        
+        # Apply theme to text area
         self.text_area.config(
-            bg=theme['bg'], fg=theme['fg'], insertbackground=theme['cursor']
+            bg=theme['bg'],
+            fg=theme['fg'],
+            insertbackground=theme['cursor'],
+            selectbackground=theme['select_bg'],
+            selectforeground=theme['select_fg']
         )
+        
+        # Apply theme to line numbers
         self.line_numbers.config(
-            background=theme['line_bg'], foreground=theme['line_fg']
+            background=theme['line_bg'],
+            foreground=theme['line_fg']
         )
-        # ...apply theme to other widgets if needed...
+        
+        # Apply theme to status bar
+        self.status_bar.config(
+            background=theme['menu_bg'],
+            foreground=theme['menu_fg']
+        )
+        
+        # Apply theme to toolbar buttons and menus
+        for widget in self.main_frame.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                widget.configure(style='Toolbar.TFrame')
+            elif isinstance(widget, ttk.Button):
+                widget.configure(style='Tool.TButton')
+            elif isinstance(widget, ttk.Combobox):
+                widget.configure(style='TCombobox')
+            elif isinstance(widget, ttk.Label):
+                widget.configure(style='TLabel')
+            elif isinstance(widget, ttk.Separator):
+                widget.configure(style='TSeparator')
+        
+        # Update syntax highlighting colors
+        self.text_area.tag_config('keyword', foreground=theme['keyword'])
+        self.text_area.tag_config('bracket', foreground=theme['bracket'])
+        self.text_area.tag_config('misspelled', foreground=theme['misspelled'])
+        self.text_area.tag_config('found', foreground=theme['found_fg'], background=theme['found_bg'])
 
     def change_theme(self, theme_name):
         if theme_name == 'default':
@@ -381,8 +538,10 @@ class TextEditor:
         return 'break'
     
     def sync_scroll(self, event=None):
-        self.line_numbers.yview_moveto(self.text_area.yview_moveto())
-        self.line_numbers.update_idletasks()
+        # Get first visible line fraction
+        first = self.text_area.yview()[0]
+        # Move line_numbers to same fraction
+        self.line_numbers.yview_moveto(first)
 
     def update_line_numbers(self):
         self.line_numbers.config(state='normal')
@@ -418,18 +577,53 @@ class TextEditor:
         # ...add more syntax rules as needed...
 
     def check_spelling(self):
+        """Spell check only if enabled"""
+        if not self.SPELL_CHECK_ENABLED:
+            return
+        """Improved spell checking with caching and better word detection"""
         self.text_area.tag_remove('misspelled', '1.0', tk.END)
-        words = self.text_area.get('1.0', 'end-1c').split()
-        start_index = '1.0'
-        for word in words:
-            if not self.spell_checker.check(word):
-                idx = self.text_area.search(word, start_index, nocase=1, stopindex=tk.END)
-                if idx:
-                    lastidx = f'{idx}+{len(word)}c'
-                    self.text_area.tag_add('misspelled', idx, lastidx)
-                    start_index = lastidx
-        self.text_area.tag_config('misspelled', foreground='red', underline=1)
-    
+        
+        # Cache for checked words to avoid re-checking
+        checked_words = {}
+        
+        # Get visible text only for performance
+        first_visible = self.text_area.index("@0,0")
+        last_visible = self.text_area.index(f"@0,{self.text_area.winfo_height()}")
+        content = self.text_area.get(first_visible, last_visible)
+        
+        # Improved word splitting pattern
+        import re
+        words = re.finditer(r'\b[a-zA-Z]+\b', content)
+        
+        for match in words:
+            word = match.group()
+            if word.lower() in checked_words:
+                is_correct = checked_words[word.lower()]
+            else:
+                # Skip checking if word contains numbers or special characters
+                if any(not c.isalpha() for c in word):
+                    continue
+                    
+                # Skip short words and probable variable names
+                if len(word) <= 1 or (word.lower() != word and word.upper() != word):
+                    continue
+                    
+                is_correct = self.spell_checker.check(word)
+                checked_words[word.lower()] = is_correct
+            
+            if not is_correct:
+                start = match.start()
+                end = match.end()
+                # Convert character offsets to text widget indices
+                start_idx = f"{first_visible}+{start}c"
+                end_idx = f"{first_visible}+{end}c"
+                self.text_area.tag_add('misspelled', start_idx, end_idx)
+
+        # Apply theme-aware misspelled word styling
+        self.text_area.tag_config('misspelled', 
+                                foreground=self.current_theme['misspelled'],
+                                underline=1)
+
     def create_spellcheck_menu(self):
         self.spellcheck_menu = tk.Menu(self.root, tearoff=0)
         self.spellcheck_menu.add_command(label="Replace with...", command=self.replace_word)
@@ -438,8 +632,33 @@ class TextEditor:
     def show_spellcheck_menu(self, event):
         index = self.text_area.index(f"@{event.x},{event.y}")
         if 'misspelled' in self.text_area.tag_names(index):
+            # Get the misspelled word
+            word_start = self.text_area.index(f"{index} wordstart")
+            word_end = self.text_area.index(f"{index} wordend")
+            word = self.text_area.get(word_start, word_end)
+            
+            # Clear and rebuild the menu
+            self.spellcheck_menu.delete(0, tk.END)
+            
+            # Add suggestions
+            suggestions = self.spell_checker.suggest(word)[:5]  # Limit to top 5 suggestions
+            for suggestion in suggestions:
+                self.spellcheck_menu.add_command(
+                    label=suggestion,
+                    command=lambda s=suggestion, ws=word_start, we=word_end: self.replace_with_suggestion(s, ws, we)
+                )
+            
+            if suggestions:
+                self.spellcheck_menu.add_separator()
+            self.spellcheck_menu.add_command(label="Ignore", command=lambda: self.text_area.tag_remove('misspelled', word_start, word_end))
+            
             self.spellcheck_menu.tk_popup(event.x_root, event.y_root)
-    
+
+    def replace_with_suggestion(self, suggestion, word_start, word_end):
+        self.text_area.delete(word_start, word_end)
+        self.text_area.insert(word_start, suggestion)
+        self.text_area.tag_remove('misspelled', word_start, f"{word_start}+{len(suggestion)}c")
+
     def replace_word(self):
         try:
             selection_start = self.text_area.index(tk.SEL_FIRST)
