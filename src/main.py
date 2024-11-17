@@ -82,6 +82,7 @@ class TextEditor:
         self.create_menu()  # Ensure the menu bar is created
 
     def create_text_widgets(self):
+        self.text_frame = ttk.Frame(self.main_frame)
         # Create text frame and configure grid
         self.text_frame.grid(row=1, column=0, sticky='nsew')
         self.main_frame.grid_rowconfigure(1, weight=1)
@@ -321,28 +322,97 @@ class TextEditor:
     
     def change_font_family(self, event=None):
         self.current_font_family = self.font_family_var.get()
-        self.text_font.configure(family=self.current_font_family)
-        self.text_area.configure(font=self.text_font)  # Apply font change to text area
+        if self.text_area.tag_ranges("sel"):
+            self.text_area.tag_add("font_family", "sel.first", "sel.last")
+        else:
+            self.text_area.tag_add("font_family", "1.0", "end")
+        self.update_all_tags()
 
     def change_font_size(self, event=None):
         self.current_font_size = self.font_size_var.get()
-        self.text_font.configure(size=self.current_font_size)
-        self.text_area.configure(font=self.text_font)  # Corrected syntax error
+        if self.text_area.tag_ranges("sel"):
+            self.text_area.tag_add("font_size", "sel.first", "sel.last")
+        else:
+            self.text_area.tag_add("font_size", "1.0", "end")
+        self.update_all_tags()
 
     def toggle_bold(self):
-        current_weight = self.text_font.cget('weight')
-        new_weight = 'normal' if current_weight == 'bold' else 'bold'
-        self.text_font.configure(weight=new_weight)
+        if self.text_area.tag_ranges("sel"):
+            # Text is selected
+            if "bold" in self.text_area.tag_names("sel.first"):
+                # Remove bold from selection
+                self.text_area.tag_remove("bold", "sel.first", "sel.last")
+            else:
+                # Add bold to selection
+                self.text_area.tag_add("bold", "sel.first", "sel.last")
+        else:
+            # No text selected, toggle bold for all text
+            if self.text_area.tag_ranges("bold"):
+                self.text_area.tag_remove("bold", "1.0", "end")
+            else:
+                self.text_area.tag_add("bold", "1.0", "end")
+
+        # Configure the 'bold' tag with updated font
+        bold_font = tkfont.Font(self.text_area, self.text_area.cget("font"))
+        bold_font.configure(weight="bold")
+        self.text_area.tag_configure("bold", font=bold_font)
 
     def toggle_italic(self):
-        current_slant = self.text_font.cget('slant')
-        new_slant = 'roman' if current_slant == 'italic' else 'italic'
-        self.text_font.configure(slant=new_slant)
+        # ...existing code...
+        if self.text_area.tag_ranges("sel"):
+            if "italic" in self.text_area.tag_names("sel.first"):
+                self.text_area.tag_remove("italic", "sel.first", "sel.last")
+            else:
+                self.text_area.tag_add("italic", "sel.first", "sel.last")
+        else:
+            if self.text_area.tag_ranges("italic"):
+                self.text_area.tag_remove("italic", "1.0", "end")
+            else:
+                self.text_area.tag_add("italic", "1.0", "end")
+
+        italic_font = tkfont.Font(self.text_area, self.text_area.cget("font"))
+        italic_font.configure(slant="italic")
+        self.text_area.tag_configure("italic", font=italic_font)
 
     def toggle_underline(self):
-        current_underline = self.text_font.cget('underline')
-        new_underline = 0 if current_underline == 1 else 1
-        self.text_font.configure(underline=new_underline)
+        # ...existing code...
+        if self.text_area.tag_ranges("sel"):
+            if "underline" in self.text_area.tag_names("sel.first"):
+                self.text_area.tag_remove("underline", "sel.first", "sel.last")
+            else:
+                self.text_area.tag_add("underline", "sel.first", "sel.last")
+        else:
+            if self.text_area.tag_ranges("underline"):
+                self.text_area.tag_remove("underline", "1.0", "end")
+            else:
+                self.text_area.tag_add("underline", "1.0", "end")
+
+        underline_font = tkfont.Font(self.text_area, self.text_area.cget("font"))
+        underline_font.configure(underline=1)
+        self.text_area.tag_configure("underline", font=underline_font)
+
+    def update_all_tags(self):
+        base_font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
+        # Configure 'bold' tag
+        bold_font = base_font.copy()
+        bold_font.configure(weight="bold")
+        self.text_area.tag_configure("bold", font=bold_font)
+        # Configure 'italic' tag
+        italic_font = base_font.copy()
+        italic_font.configure(slant="italic")
+        self.text_area.tag_configure("italic", font=italic_font)
+        # Configure 'underline' tag
+        underline_font = base_font.copy()
+        underline_font.configure(underline=1)
+        self.text_area.tag_configure("underline", font=underline_font)
+        # Configure 'font_family' tag
+        family_font = base_font.copy()
+        family_font.configure(family=self.current_font_family)
+        self.text_area.tag_configure("font_family", font=family_font)
+        # Configure 'font_size' tag
+        size_font = base_font.copy()
+        size_font.configure(size=self.current_font_size)
+        self.text_area.tag_configure("font_size", font=size_font)
 
     def find_text(self):
         search_toplevel = tk.Toplevel(self.root)
