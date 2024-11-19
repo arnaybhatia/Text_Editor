@@ -53,11 +53,9 @@ class TextEditor:
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
         
-        # Create toolbar and place it at the top
-        self.create_toolbar()
-
-        # Create text area and status bar frame
+        # Change the order: create text widgets before toolbar
         self.create_text_widgets()
+        self.create_toolbar()
 
         # Bind events
         self.bind_shortcuts()
@@ -80,6 +78,8 @@ class TextEditor:
         self.start_autosave()
 
         self.create_menu()  # Ensure the menu bar is created
+        self.bind_cursor_events()
+        self.update_all_tags()
 
     def create_text_widgets(self):
         self.text_frame = ttk.Frame(self.main_frame)
@@ -149,6 +149,11 @@ class TextEditor:
         self.text_area.bind('<Button-1>', lambda e: self.sync_scroll())
         self.text_area.bind('<Configure>', lambda e: self.sync_scroll())
 
+        # Add font control update bindings
+        self.text_area.bind('<Button-1>', self.update_font_controls)
+        self.text_area.bind('<KeyRelease>', self.update_font_controls)
+        self.text_area.bind('<<Selection>>', self.update_font_controls)
+
         # Create status bar and place it at the bottom
         self.status_bar.grid(row=2, column=0, sticky='ew')
 
@@ -188,7 +193,7 @@ class TextEditor:
             state='readonly'
         )
         font_family_menu.pack(side='left', padx=1)
-        font_family_menu.bind("<<ComboboxSelected>>", self.change_font_family)  # Bind event
+        font_family_menu.bind("<<ComboboxSelected>>", lambda e: self.change_font_family(e, maintain_selection=True))
         
         # More compact size dropdown
         self.font_size_var = tk.IntVar(value=self.current_font_size)
@@ -201,7 +206,7 @@ class TextEditor:
             state='readonly'
         )
         font_size_menu.pack(side='left', padx=1)
-        font_size_menu.bind("<<ComboboxSelected>>", self.change_font_size)  # Bind event
+        font_size_menu.bind("<<ComboboxSelected>>", lambda e: self.change_font_size(e, maintain_selection=True))
         
         ttk.Separator(self.toolbar, orient='vertical').pack(side='left', fill='y', padx=3, pady=2)
         
@@ -210,14 +215,14 @@ class TextEditor:
         style_frame.pack(side='left', padx=2)
         
         # Add formatting buttons (more compact)
-        bold_btn = ttk.Button(style_frame, text="B", style='Tool.TButton', command=self.toggle_bold, width=2)
-        bold_btn.pack(side='left', padx=1)
+        self.bold_btn = ttk.Button(style_frame, text="B", style='Tool.TButton', command=self.toggle_bold, width=2)
+        self.bold_btn.pack(side='left', padx=1)
         
-        italic_btn = ttk.Button(style_frame, text="I", style='Tool.TButton', command=self.toggle_italic, width=2)
-        italic_btn.pack(side='left', padx=1)
+        self.italic_btn = ttk.Button(style_frame, text="I", style='Tool.TButton', command=self.toggle_italic, width=2)
+        self.italic_btn.pack(side='left', padx=1)
         
-        underline_btn = ttk.Button(style_frame, text="U", style='Tool.TButton', command=self.toggle_underline, width=2)
-        underline_btn.pack(side='left', padx=1)
+        self.underline_btn = ttk.Button(style_frame, text="U", style='Tool.TButton', command=self.toggle_underline, width=2)
+        self.underline_btn.pack(side='left', padx=1)
 
     def create_menu(self):
         menu_bar = tk.Menu(self.root)
@@ -320,99 +325,238 @@ class TextEditor:
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             self.root.quit()
     
-    def change_font_family(self, event=None):
+    def change_font_family(self, event=None, maintain_selection=False):
+        if maintain_selection:
+            try:
+                sel_start = self.text_area.index("sel.first")
+                sel_end = self.text_area.index("sel.last")
+                has_selection = True
+            except tk.TclError:
+                has_selection = False
+
         self.current_font_family = self.font_family_var.get()
         if self.text_area.tag_ranges("sel"):
-            self.text_area.tag_add("font_family", "sel.first", "sel.last")
+            start = self.text_area.index("sel.first")
+            end = self.text_area.index("sel.last")
         else:
-            self.text_area.tag_add("font_family", "1.0", "end")
-        self.update_all_tags()
+            start = "insert"
+            end = "insert +1c"
 
-    def change_font_size(self, event=None):
+        # Get existing styles at current position
+        current_tags = self.text_area.tag_names(start)
+        is_bold = 'bold' in current_tags
+        is_italic = 'italic' in current_tags
+        is_underline = 'underline' in current_tags
+            
+        # Create and configure font with current styles
+        font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
+        if is_bold:
+            font.configure(weight='bold')
+        if is_italic:
+            font.configure(slant='italic')
+        if is_underline:
+            font.configure(underline=1)
+            
+        # Apply the combined font configuration
+        self.text_area.tag_configure('format', font=font)
+        self.text_area.tag_add('format', start, end)
+
+        if maintain_selection and has_selection:
+            self.text_area.tag_remove("sel", "1.0", "end")
+            self.text_area.tag_add("sel", sel_start, sel_end)
+
+    def change_font_size(self, event=None, maintain_selection=False):
+        # Similar changes as change_font_family
+        if maintain_selection:
+            try:
+                sel_start = self.text_area.index("sel.first")
+                sel_end = self.text_area.index("sel.last")
+                has_selection = True
+            except tk.TclError:
+                has_selection = False
+
         self.current_font_size = self.font_size_var.get()
         if self.text_area.tag_ranges("sel"):
-            self.text_area.tag_add("font_size", "sel.first", "sel.last")
+            start = self.text_area.index("sel.first")
+            end = self.text_area.index("sel.last")
         else:
-            self.text_area.tag_add("font_size", "1.0", "end")
-        self.update_all_tags()
+            start = "insert"
+            end = "insert +1c"
+
+        # Get existing styles
+        current_tags = self.text_area.tag_names(start)
+        is_bold = 'bold' in current_tags
+        is_italic = 'italic' in current_tags
+        is_underline = 'underline' in current_tags
+            
+        # Create and configure font with current styles
+        font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
+        if is_bold:
+            font.configure(weight='bold')
+        if is_italic:
+            font.configure(slant='italic')
+        if is_underline:
+            font.configure(underline=1)
+            
+        # Apply the combined font configuration
+        self.text_area.tag_configure('format', font=font)
+        self.text_area.tag_add('format', start, end)
+
+        if maintain_selection and has_selection:
+            self.text_area.tag_remove("sel", "1.0", "end")
+            self.text_area.tag_add("sel", sel_start, sel_end)
+
+    def toggle_style(self, style):
+        try:
+            if self.text_area.tag_ranges("sel"):
+                start = self.text_area.index("sel.first")
+                end = self.text_area.index("sel.last")
+            else:
+                start = "insert"
+                end = "insert +1c"
+
+            # Get current styles
+            current_tags = self.text_area.tag_names(start)
+            is_bold = 'bold' in current_tags
+            is_italic = 'italic' in current_tags
+            is_underline = 'underline' in current_tags
+            
+            # Update style flags based on which style is being toggled
+            if style == 'bold':
+                is_bold = not is_bold
+            elif style == 'italic':
+                is_italic = not is_italic
+            elif style == 'underline':
+                is_underline = not is_underline
+                
+            # Configure font with all current styles
+            font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
+            if is_bold:
+                font.configure(weight='bold')
+                self.text_area.tag_add('bold', start, end)
+            else:
+                self.text_area.tag_remove('bold', start, end)
+                
+            if is_italic:
+                font.configure(slant='italic')
+                self.text_area.tag_add('italic', start, end)
+            else:
+                self.text_area.tag_remove('italic', start, end)
+                
+            if is_underline:
+                font.configure(underline=1)
+                self.text_area.tag_add('underline', start, end)
+            else:
+                self.text_area.tag_remove('underline', start, end)
+                
+            # Apply the combined font configuration
+            self.text_area.tag_configure('format', font=font)
+            self.text_area.tag_add('format', start, end)
+            
+            # Update button states
+            self.update_format_buttons()
+        except Exception as e:
+            print(f"Error in toggle_style: {e}")
 
     def toggle_bold(self):
-        if self.text_area.tag_ranges("sel"):
-            # Text is selected
-            if "bold" in self.text_area.tag_names("sel.first"):
-                # Remove bold from selection
-                self.text_area.tag_remove("bold", "sel.first", "sel.last")
-            else:
-                # Add bold to selection
-                self.text_area.tag_add("bold", "sel.first", "sel.last")
-        else:
-            # No text selected, toggle bold for all text
-            if self.text_area.tag_ranges("bold"):
-                self.text_area.tag_remove("bold", "1.0", "end")
-            else:
-                self.text_area.tag_add("bold", "1.0", "end")
-
-        # Configure the 'bold' tag with updated font
-        bold_font = tkfont.Font(self.text_area, self.text_area.cget("font"))
-        bold_font.configure(weight="bold")
-        self.text_area.tag_configure("bold", font=bold_font)
+        self.toggle_style('bold')
 
     def toggle_italic(self):
-        # ...existing code...
-        if self.text_area.tag_ranges("sel"):
-            if "italic" in self.text_area.tag_names("sel.first"):
-                self.text_area.tag_remove("italic", "sel.first", "sel.last")
-            else:
-                self.text_area.tag_add("italic", "sel.first", "sel.last")
-        else:
-            if self.text_area.tag_ranges("italic"):
-                self.text_area.tag_remove("italic", "1.0", "end")
-            else:
-                self.text_area.tag_add("italic", "1.0", "end")
-
-        italic_font = tkfont.Font(self.text_area, self.text_area.cget("font"))
-        italic_font.configure(slant="italic")
-        self.text_area.tag_configure("italic", font=italic_font)
+        self.toggle_style('italic')
 
     def toggle_underline(self):
-        # ...existing code...
-        if self.text_area.tag_ranges("sel"):
-            if "underline" in self.text_area.tag_names("sel.first"):
-                self.text_area.tag_remove("underline", "sel.first", "sel.last")
-            else:
-                self.text_area.tag_add("underline", "sel.first", "sel.last")
-        else:
-            if self.text_area.tag_ranges("underline"):
-                self.text_area.tag_remove("underline", "1.0", "end")
-            else:
-                self.text_area.tag_add("underline", "1.0", "end")
+        self.toggle_style('underline')
 
-        underline_font = tkfont.Font(self.text_area, self.text_area.cget("font"))
-        underline_font.configure(underline=1)
-        self.text_area.tag_configure("underline", font=underline_font)
+    def update_style_tags(self, start, end):
+        # Remove existing combined style tags
+        tags_to_remove = ['normal', 'bold', 'italic', 'underline',
+                          'bold_italic', 'bold_underline', 'italic_underline', 'bold_italic_underline']
+
+        for tag in tags_to_remove:
+            self.text_area.tag_remove(tag, start, end)
+
+        # Reapply combined style tags
+        index = start
+        while self.text_area.compare(index, '<', end):
+            current_tags = set(self.text_area.tag_names(index))
+            applied_styles = [style for style in ['bold', 'italic', 'underline'] if style in current_tags]
+            tag_name = '_'.join(applied_styles) if applied_styles else 'normal'
+            next_index = self.text_area.index(f"{index} +1c")
+            self.text_area.tag_add(tag_name, index, next_index)
+            index = next_index
 
     def update_all_tags(self):
+        # Create font configurations for all style combinations
         base_font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
-        # Configure 'bold' tag
-        bold_font = base_font.copy()
-        bold_font.configure(weight="bold")
-        self.text_area.tag_configure("bold", font=bold_font)
-        # Configure 'italic' tag
-        italic_font = base_font.copy()
-        italic_font.configure(slant="italic")
-        self.text_area.tag_configure("italic", font=italic_font)
-        # Configure 'underline' tag
-        underline_font = base_font.copy()
-        underline_font.configure(underline=1)
-        self.text_area.tag_configure("underline", font=underline_font)
-        # Configure 'font_family' tag
-        family_font = base_font.copy()
-        family_font.configure(family=self.current_font_family)
-        self.text_area.tag_configure("font_family", font=family_font)
-        # Configure 'font_size' tag
-        size_font = base_font.copy()
-        size_font.configure(size=self.current_font_size)
-        self.text_area.tag_configure("font_size", font=size_font)
+
+        styles = ['bold', 'italic', 'underline']
+        combinations = []
+        for i in range(1, 8):
+            combo = tuple([style for idx, style in enumerate(styles) if i & (1 << idx)])
+            combinations.append(combo)
+        combinations.append(())
+
+        for combo in combinations:
+            tag_name = '_'.join(combo) if combo else 'normal'
+            font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
+            if 'bold' in combo:
+                font.configure(weight='bold')
+            if 'italic' in combo:
+                font.configure(slant='italic')
+            if 'underline' in combo:
+                font.configure(underline=1)
+            self.text_area.tag_configure(tag_name, font=font)
+
+    def update_format_buttons(self, event=None):
+        try:
+            # Get tags at current cursor position
+            current_tags = self.text_area.tag_names("insert")
+            
+            # Update button states
+            self.bold_btn.state(['pressed' if 'bold' in current_tags else '!pressed'])
+            self.italic_btn.state(['pressed' if 'italic' in current_tags else '!pressed'])
+            self.underline_btn.state(['pressed' if 'underline' in current_tags else '!pressed'])
+        except Exception as e:
+            print(f"Error in update_format_buttons: {e}")
+
+    def update_font_controls(self, event=None):
+        try:
+            # Get current position
+            if self.text_area.tag_ranges("sel"):
+                index = "sel.first"
+            else:
+                index = "insert"
+            
+            # Get font at current position
+            current_tags = self.text_area.tag_names(index)
+            current_font = None
+            
+            # Try to get font from tags
+            for tag in current_tags:
+                try:
+                    current_font = self.text_area.tag_cget(tag, 'font')
+                    if current_font:
+                        break
+                except:
+                    continue
+            
+            if current_font:
+                # Parse font string to get family and size
+                font = tkfont.Font(font=current_font)
+                family = font.actual('family')
+                size = font.actual('size')
+                
+                # Update font controls without triggering events
+                self.font_family_var.set(family)
+                self.font_size_var.set(size)
+        except Exception as e:
+            print(f"Error updating font controls: {e}")
+
+    def bind_cursor_events(self):
+        # Bind events to update format buttons
+        self.text_area.bind("<KeyRelease>", self.update_format_buttons)
+        self.text_area.bind("<ButtonRelease>", self.update_format_buttons)
+        self.text_area.bind("<<Selection>>", self.update_format_buttons)
 
     def find_text(self):
         search_toplevel = tk.Toplevel(self.root)
