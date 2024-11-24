@@ -81,6 +81,11 @@ class TextEditor:
         self.bind_cursor_events()
         self.update_all_tags()
 
+        # Add these bindings
+        self.text_area.bind('<Return>', self.auto_indent)
+        self.text_area.bind('<Key>', self.match_brackets)
+        self.text_area.bind('<KeyRelease>', lambda e: self.highlight_syntax())
+
     def create_text_widgets(self):
         self.text_frame = ttk.Frame(self.main_frame)
         # Create text frame and configure grid
@@ -365,6 +370,28 @@ class TextEditor:
             self.text_area.tag_remove("sel", "1.0", "end")
             self.text_area.tag_add("sel", sel_start, sel_end)
 
+        # ...existing code...
+        # After getting current tags, preserve styles while changing font
+        active_styles = set()
+        for style in ['bold', 'italic', 'underline']:
+            if style in current_tags:
+                active_styles.add(style)
+        
+        font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
+        
+        # Reapply active styles to new font
+        if 'bold' in active_styles:
+            font.configure(weight='bold')
+        if 'italic' in active_styles:
+            font.configure(slant='italic')
+        if 'underline' in active_styles:
+            font.configure(underline=1)
+        
+        tag_name = '_'.join(sorted(active_styles)) if active_styles else 'format'
+        self.text_area.tag_configure(tag_name, font=font)
+        self.text_area.tag_add(tag_name, start, end)
+        # ...existing code...
+
     def change_font_size(self, event=None, maintain_selection=False):
         # Similar changes as change_font_family
         if maintain_selection:
@@ -406,55 +433,85 @@ class TextEditor:
             self.text_area.tag_remove("sel", "1.0", "end")
             self.text_area.tag_add("sel", sel_start, sel_end)
 
+        # ...existing code...
+        # After getting current tags, preserve styles while changing size
+        active_styles = set()
+        for style in ['bold', 'italic', 'underline']:
+            if style in current_tags:
+                active_styles.add(style)
+        
+        font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
+        
+        # Reapply active styles to new font size
+        if 'bold' in active_styles:
+            font.configure(weight='bold')
+        if 'italic' in active_styles:
+            font.configure(slant='italic')
+        if 'underline' in active_styles:
+            font.configure(underline=1)
+        
+        tag_name = '_'.join(sorted(active_styles)) if active_styles else 'format'
+        self.text_area.tag_configure(tag_name, font=font)
+        self.text_area.tag_add(tag_name, start, end)
+        # ...existing code...
+
     def toggle_style(self, style):
         try:
             if self.text_area.tag_ranges("sel"):
                 start = self.text_area.index("sel.first")
                 end = self.text_area.index("sel.last")
             else:
-                start = "insert"
-                end = "insert +1c"
+                start = self.text_area.index("insert")
+                end = f"{start}+1c"
 
-            # Get current styles
+            # Get current styles at the position
             current_tags = self.text_area.tag_names(start)
-            is_bold = 'bold' in current_tags
-            is_italic = 'italic' in current_tags
-            is_underline = 'underline' in current_tags
-            
-            # Update style flags based on which style is being toggled
+            is_style_active = style in current_tags
+
+            # Get current font settings
+            current_font = self.text_area.tag_cget('format', 'font') if 'format' in current_tags else None
+            if current_font:
+                font = tkfont.Font(font=current_font)
+            else:
+                font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
+
+            # Update font configuration while preserving other styles
             if style == 'bold':
-                is_bold = not is_bold
+                font.configure(weight='bold' if not is_style_active else 'normal')
             elif style == 'italic':
-                is_italic = not is_italic
+                font.configure(slant='italic' if not is_style_active else 'roman')
             elif style == 'underline':
-                is_underline = not is_underline
-                
-            # Configure font with all current styles
-            font = tkfont.Font(family=self.current_font_family, size=self.current_font_size)
-            if is_bold:
-                font.configure(weight='bold')
-                self.text_area.tag_add('bold', start, end)
-            else:
-                self.text_area.tag_remove('bold', start, end)
-                
-            if is_italic:
-                font.configure(slant='italic')
-                self.text_area.tag_add('italic', start, end)
-            else:
-                self.text_area.tag_remove('italic', start, end)
-                
-            if is_underline:
-                font.configure(underline=1)
-                self.text_area.tag_add('underline', start, end)
-            else:
-                self.text_area.tag_remove('underline', start, end)
-                
-            # Apply the combined font configuration
-            self.text_area.tag_configure('format', font=font)
-            self.text_area.tag_add('format', start, end)
+                font.configure(underline=1 if not is_style_active else 0)
+
+            # Create a unique tag name for this combination of styles
+            active_styles = set()
+            for s in ['bold', 'italic', 'underline']:
+                if s in current_tags and s != style:
+                    active_styles.add(s)
+            if not is_style_active:
+                active_styles.add(style)
             
-            # Update button states
+            tag_name = '_'.join(sorted(active_styles)) if active_styles else 'format'
+
+            # Configure and apply the tag
+            self.text_area.tag_configure(tag_name, font=font)
+            
+            # Remove old tags and apply new one
+            for old_tag in ['bold', 'italic', 'underline', 'format']:
+                self.text_area.tag_remove(old_tag, start, end)
+            self.text_area.tag_add(tag_name, start, end)
+
+            # Update the format buttons
             self.update_format_buttons()
+
+            # Handle future typing
+            def handle_keypress(event):
+                if event.char and not event.char.isspace():
+                    current_pos = self.text_area.index("insert")
+                    self.text_area.tag_add(tag_name, f"{current_pos}-1c", current_pos)
+
+            self.text_area.bind("<Key>", handle_keypress, add="+")
+
         except Exception as e:
             print(f"Error in toggle_style: {e}")
 
@@ -481,9 +538,8 @@ class TextEditor:
             current_tags = set(self.text_area.tag_names(index))
             applied_styles = [style for style in ['bold', 'italic', 'underline'] if style in current_tags]
             tag_name = '_'.join(applied_styles) if applied_styles else 'normal'
-            next_index = self.text_area.index(f"{index} +1c")
-            self.text_area.tag_add(tag_name, index, next_index)
-            index = next_index
+            self.text_area.tag_add(tag_name, index, f"{index} +1c")
+            index = f"{index} +1c"
 
     def update_all_tags(self):
         # Create font configurations for all style combinations
@@ -509,10 +565,8 @@ class TextEditor:
 
     def update_format_buttons(self, event=None):
         try:
-            # Get tags at current cursor position
             current_tags = self.text_area.tag_names("insert")
-            
-            # Update button states
+            # Configure button appearances based on current style
             self.bold_btn.state(['pressed' if 'bold' in current_tags else '!pressed'])
             self.italic_btn.state(['pressed' if 'italic' in current_tags else '!pressed'])
             self.underline_btn.state(['pressed' if 'underline' in current_tags else '!pressed'])
