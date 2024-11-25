@@ -845,52 +845,61 @@ class TextEditor:
         # ...add more syntax rules as needed...
 
     def check_spelling(self):
-        """Spell check only if enabled"""
+        """Spell check the visible text while preserving styling"""
         if not self.SPELL_CHECK_ENABLED:
             return
-        """Improved spell checking with caching and better word detection"""
-        self.text_area.tag_remove('misspelled', '1.0', tk.END)
-        
-        # Cache for checked words to avoid re-checking
-        checked_words = {}
-        
-        # Get visible text only for performance
-        first_visible = self.text_area.index("@0,0")
-        last_visible = self.text_area.index(f"@0,{self.text_area.winfo_height()}")
-        content = self.text_area.get(first_visible, last_visible)
-        
-        # Improved word splitting pattern
-        import re
-        words = re.finditer(r'\b[a-zA-Z]+\b', content)
-        
-        for match in words:
-            word = match.group()
-            if word.lower() in checked_words:
-                is_correct = checked_words[word.lower()]
-            else:
-                # Skip checking if word contains numbers or special characters
-                if any(not c.isalpha() for c in word):
-                    continue
-                    
-                # Skip short words and probable variable names
+            
+        try:
+            self.text_area.tag_remove('misspelled', '1.0', tk.END)
+            
+            # Get visible text region
+            first_visible = self.text_area.index("@0,0")
+            last_visible = self.text_area.index(f"@0,{self.text_area.winfo_height()}")
+            
+            # Cache for checked words
+            checked_words = {}
+            
+            # Find words in visible text
+            import re
+            text = self.text_area.get(first_visible, last_visible)
+            
+            for match in re.finditer(r'\b[a-zA-Z]+\b', text):
+                word = match.group()
+                
+                # Skip checking if word is too short or likely a code identifier
                 if len(word) <= 1 or (word.lower() != word and word.upper() != word):
                     continue
                     
-                is_correct = self.spell_checker.check(word)
-                checked_words[word.lower()] = is_correct
-            
-            if not is_correct:
-                start = match.start()
-                end = match.end()
-                # Convert character offsets to text widget indices
-                start_idx = f"{first_visible}+{start}c"
-                end_idx = f"{first_visible}+{end}c"
-                self.text_area.tag_add('misspelled', start_idx, end_idx)
+                # Use cached result if available
+                if word.lower() in checked_words:
+                    is_correct = checked_words[word.lower()]
+                else:
+                    is_correct = self.spell_checker.check(word)
+                    checked_words[word.lower()] = is_correct
+                
+                if not is_correct:
+                    start = match.start()
+                    end = match.end()
+                    start_idx = f"{first_visible}+{start}c"
+                    end_idx = f"{first_visible}+{end}c"
+                    
+                    # Add misspelled tag while preserving existing styles
+                    self.text_area.tag_add('misspelled', start_idx, end_idx)
+                    
+                    # Ensure misspelled styling doesn't override existing font attributes
+                    current_tags = self.text_area.tag_names(start_idx)
+                    for tag in current_tags:
+                        if tag != 'misspelled':
+                            font_config = self.text_area.tag_cget(tag, 'font')
+                            if font_config:
+                                self.text_area.tag_config('misspelled', font=font_config)
 
-        # Apply theme-aware misspelled word styling
-        self.text_area.tag_config('misspelled', 
-                                foreground=self.current_theme['misspelled'],
-                                underline=1)
+            # Apply theme-aware misspelled styling
+            self.text_area.tag_config('misspelled', 
+                                    foreground=self.current_theme['misspelled'],
+                                    underline=1)
+        except Exception as e:
+            print(f"Error in check_spelling: {e}")
 
     def create_spellcheck_menu(self):
         self.spellcheck_menu = tk.Menu(self.root, tearoff=0)
@@ -898,34 +907,68 @@ class TextEditor:
         self.text_area.bind("<Button-3>", self.show_spellcheck_menu)
     
     def show_spellcheck_menu(self, event):
-        index = self.text_area.index(f"@{event.x},{event.y}")
-        if 'misspelled' in self.text_area.tag_names(index):
-            # Get the misspelled word
-            word_start = self.text_area.index(f"{index} wordstart")
-            word_end = self.text_area.index(f"{index} wordend")
-            word = self.text_area.get(word_start, word_end)
-            
-            # Clear and rebuild the menu
-            self.spellcheck_menu.delete(0, tk.END)
-            
-            # Add suggestions
-            suggestions = self.spell_checker.suggest(word)[:5]  # Limit to top 5 suggestions
-            for suggestion in suggestions:
+        try:
+            index = self.text_area.index(f"@{event.x},{event.y}")
+            if 'misspelled' in self.text_area.tag_names(index):
+                # Get the misspelled word boundaries
+                word_start = self.text_area.index(f"{index} wordstart")
+                word_end = self.text_area.index(f"{index} wordend")
+                word = self.text_area.get(word_start, word_end)
+                
+                # Get all tags at the word position
+                current_tags = [tag for tag in self.text_area.tag_names(word_start)
+                              if tag not in ('sel', 'misspelled')]
+                
+                # Clear and rebuild the menu
+                self.spellcheck_menu.delete(0, tk.END)
+                
+                # Add suggestions with style preservation
+                suggestions = self.spell_checker.suggest(word)[:5]
+                for suggestion in suggestions:
+                    self.spellcheck_menu.add_command(
+                        label=suggestion,
+                        command=lambda s=suggestion, ws=word_start, we=word_end, tags=current_tags: 
+                            self.replace_with_suggestion(s, ws, we, tags)
+                    )
+                
+                if suggestions:
+                    self.spellcheck_menu.add_separator()
                 self.spellcheck_menu.add_command(
-                    label=suggestion,
-                    command=lambda s=suggestion, ws=word_start, we=word_end: self.replace_with_suggestion(s, ws, we)
+                    label="Ignore",
+                    command=lambda: self.text_area.tag_remove('misspelled', word_start, word_end)
                 )
-            
-            if suggestions:
-                self.spellcheck_menu.add_separator()
-            self.spellcheck_menu.add_command(label="Ignore", command=lambda: self.text_area.tag_remove('misspelled', word_start, word_end))
-            
-            self.spellcheck_menu.tk_popup(event.x_root, event.y_root)
+                
+                self.spellcheck_menu.tk_popup(event.x_root, event.y_root)
+        except Exception as e:
+            print(f"Error in show_spellcheck_menu: {e}")
 
-    def replace_with_suggestion(self, suggestion, word_start, word_end):
-        self.text_area.delete(word_start, word_end)
-        self.text_area.insert(word_start, suggestion)
-        self.text_area.tag_remove('misspelled', word_start, f"{word_start}+{len(suggestion)}c")
+    def replace_with_suggestion(self, suggestion, word_start, word_end, tags):
+        try:
+            # Store current tags and their configurations
+            tag_configs = {}
+            for tag in tags:
+                if tag != 'misspelled':
+                    font_config = self.text_area.tag_cget(tag, 'font')
+                    if font_config:
+                        tag_configs[tag] = font_config
+
+            # Delete old word and insert new one
+            self.text_area.delete(word_start, word_end)
+            self.text_area.insert(word_start, suggestion)
+            end_idx = f"{word_start}+{len(suggestion)}c"
+
+            # Reapply all style tags
+            for tag, config in tag_configs.items():
+                self.text_area.tag_add(tag, word_start, end_idx)
+                self.text_area.tag_config(tag, font=config)
+
+            # Remove misspelled tag
+            self.text_area.tag_remove('misspelled', word_start, end_idx)
+            
+            # Update status
+            self.status_bar.config(text=f"Replaced with '{suggestion}'")
+        except Exception as e:
+            print(f"Error in replace_with_suggestion: {e}")
 
     def replace_word(self):
         try:
