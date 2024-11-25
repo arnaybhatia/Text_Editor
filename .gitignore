@@ -1,6 +1,7 @@
 # Byte-compiled files
 __pycache__/
 *.py[cod]
+*test.py
 
 # Virtual environments
 env/
